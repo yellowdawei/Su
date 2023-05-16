@@ -1,0 +1,1048 @@
+/******************************
+*            文件：    main.c
+*            描述：    主函数
+********************************/
+#include  "myinclude.h"
+#include  "time.h"
+#include  "communication.h"
+#include  "user_manager.h"
+#include  "user_interface.h"
+/******************************************************************
+函	数：	int  main(int  argc,  char  *argv[])
+功	能：	主函数
+参	数：	程序运行参数
+*******************************************************************/
+int  main(int  argc,  char  *argv[]){
+	    pthread_t  tid;	
+	    online("Sunplusapp",  "root_teacher");
+	    //用户界面线程，处理用户输入的命令
+	    pthread_create(&tid,  NULL,  user_interface,  NULL);
+	    //接收消息线程，接收其他客户端发送的UDP数据
+	    pthread_create(&tid,  NULL,  recv_msg_thread,  NULL);
+	    //发送文件线程，等待其他客户端接收文件并负责向其传送文件
+	    pthread_create(&tid,  NULL,  sendfile_thread,  NULL);
+	    //主线程不能退出
+	    pthread_join(tid,  NULL);
+	    return  0;	
+}
+
+/***********************************
+*            文件：      myinclude.h
+*            描述：      输出信息头文件
+***********************************/
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <time.h>
+#include "ipmsg.h“
+#define IPMSG_OUT_MSG_COLOR(x)   { \
+write(1, "\033[31m", 5);
+x\
+write(1, "\033[32m", 5);}
+#endif//_MYINCLUDE_H_
+
+/**************************************************************
+*            文件：     ipmsg.h
+*            描述：     存放命令字头文件
+**************************************************************/
+#ifndef IPMSG_H
+#define IPMSG_H
+#include <time.h>
+/*  IP Messenger Communication Protocol version 1.2 define  */
+/*  macro  */
+#define GET_MODE(command)	 (command & 0x000000ffUL)
+#define GET_OPT(command)		 (command & 0xffffff00UL)
+/*  header  */
+#define IPMSG_VERSION			0x0001
+#define IPMSG_DEFAULT_PORT	0x0979
+/*  command  */
+#define IPMSG_NOOPERATION	  	0x00000000UL
+#define IPMSG_BR_ENTRY		  	0x00000001UL
+#define IPMSG_BR_EXIT	      	0x00000002UL
+#define IPMSG_ANSENTRY		  	0x00000003UL
+#define IPMSG_BR_ABSENCE	    0x00000004UL
+#define IPMSG_BR_ISGETLIST		0x00000010UL
+#define IPMSG_OKGETLIST			0x00000011UL
+#define IPMSG_GETLIST			0x00000012UL
+#define IPMSG_ANSLIST			0x00000013UL
+#define IPMSG_BR_ISGETLIST2		0x00000018UL
+#define IPMSG_SENDMSG			0x00000020UL
+#define IPMSG_RECVMSG			0x00000021UL
+#define IPMSG_READMSG			0x00000030UL
+#define IPMSG_DELMSG			0x00000031UL
+#define IPMSG_ANSREADMSG		0x00000032UL
+#define IPMSG_GETINFO			0x00000040UL
+#define IPMSG_SENDINFO			0x00000041UL
+#define IPMSG_GETABSENCEINFO	0x00000050UL
+#define IPMSG_SENDABSENCEINFO	0x00000051UL
+#define IPMSG_GETFILEDATA		0x00000060UL
+#define IPMSG_RELEASEFILES		0x00000061UL
+#define IPMSG_GETDIRFILES		0x00000062UL
+#define IPMSG_GETPUBKEY			0x00000072UL
+#define IPMSG_ANSPUBKEY			0x00000073UL
+/*  option for all command  */
+#define IPMSG_ABSENCEOPT		0x00000100UL
+#define IPMSG_SERVEROPT			0x00000200UL
+#define IPMSG_DIALUPOPT			0x00010000UL
+#define IPMSG_FILEATTACHOPT		0x00200000UL
+#define IPMSG_ENCRYPTOPT		0x00400000UL
+/*  option for send command  */
+#define IPMSG_SENDCHECKOPT	    0x00000100UL
+#define IPMSG_SECRETOPT			0x00000200UL
+#define IPMSG_BROADCASTOPT	    0x00000400UL
+#define IPMSG_MULTICASTOPT		0x00000800UL
+#define IPMSG_NOPOPUPOPT		0x00001000UL
+#define IPMSG_AUTORETOPT		0x00002000UL
+#define IPMSG_RETRYOPT			0x00004000UL
+#define IPMSG_PASSWORDOPT		0x00008000UL
+#define IPMSG_NOLOGOPT		    0x00020000UL
+#define IPMSG_NEWMUTIOPT		0x00040000UL
+#define IPMSG_NOADDLISTOPT		0x00080000UL
+#define IPMSG_READCHECKOPT	    0x00100000UL
+#define IPMSG_SECRETEXOPT		(IPMSG_READCHECKOPT|IPMSG_SECRETOPT)
+/* encryption flags for encrypt command */
+#define IPMSG_RSA_512			0x00000001UL
+#define IPMSG_RSA_1024			0x00000002UL
+#define IPMSG_RSA_2048			0x00000004UL
+#define IPMSG_RC2_40			0x00001000UL
+#define IPMSG_RC2_128			0x00004000UL
+#define IPMSG_RC2_256			0x00008000UL
+#define IPMSG_BLOWFISH_128		0x00020000UL
+#define IPMSG_BLOWFISH_256		0x00040000UL
+#define IPMSG_SIGN_MD5			0x10000000UL
+/* compatibilty for Win beta version */
+#define IPMSG_RC2_40OLD	0x00000010UL		
+// for beta1-4 only
+#define IPMSG_RC2_128OLD	0x00000040UL		
+// for beta1-4 only
+#define IPMSG_BLOWFISH_128OLD	0x00000400UL		// for beta1-4 only
+#define IPMSG_RC2_40ALL	(IPMSG_RC2_40|IPMSG_RC2_40OLD)
+#define IPMSG_RC2_128ALL			(IPMSG_RC2_128|IPMSG_RC2_128OLD)
+#define IPMSG_BLOWFISH_128ALL		(IPMSG_BLOWFISH_128|IPMSG_BLOWFISH_128OLD)
+
+/* file types for fileattach command */
+#define IPMSG_FILE_REGULAR			0x00000001UL
+#define IPMSG_FILE_DIR				0x00000002UL
+#define IPMSG_FILE_RETPARENT		0x00000003UL		// return parent directory
+#define IPMSG_FILE_SYMLINK			0x00000004UL
+#define IPMSG_FILE_CDEV				0x00000005UL		// for UNIX
+#define IPMSG_FILE_BDEV				0x00000006UL		
+// for UNIX
+#define IPMSG_FILE_FIFO				0x00000007UL		
+// for UNIX
+#define IPMSG_FILE_RESFORK			0x00000010UL		
+// for Mac
+/* file attribute options for fileattach command */
+#define IPMSG_FILE_RONLYOPT			0x00000100UL
+#define IPMSG_FILE_HIDDENOPT		0x00001000UL
+#define IPMSG_FILE_EXHIDDENOPT		0x00002000UL	
+// for MacOS X
+#define IPMSG_FILE_ARCHIVEOPT		0x00004000UL
+#define IPMSG_FILE_SYSTEMOPT		0x00008000UL
+/* extend attribute types for fileattach command */
+#define IPMSG_FILE_UID				0x00000001UL
+#define IPMSG_FILE_USERNAME			0x00000002UL	
+// uid by string
+#define IPMSG_FILE_GID				0x00000003UL
+#define IPMSG_FILE_GROUPNAME		0x00000004UL		// gid by string
+#define IPMSG_FILE_PERM				0x00000010UL		// for UNIX
+#define IPMSG_FILE_MAJORNO			0x00000011UL		// for UNIX devfile
+#define IPMSG_FILE_MINORNO			0x00000012UL		// for UNIX devfile
+#define IPMSG_FILE_CTIME			0x00000013UL		// for UNIX
+#define IPMSG_FILE_MTIME			0x00000014UL
+#define IPMSG_FILE_ATIME			0x00000015UL
+#define IPMSG_FILE_CREATETIME		0x00000016UL
+#define IPMSG_FILE_CREATOR			0x00000020UL		// for Mac
+#define IPMSG_FILE_FILETYPE			0x00000021UL	
+	// for Mac
+#define IPMSG_FILE_FINDERINFO		0x00000022UL	
+// for Mac
+#define IPMSG_FILE_ACL				0x00000030UL
+#define IPMSG_FILE_ALIASFNAME		0x00000040UL	
+// alias fname
+#define IPMSG_FILE_UNICODEFNAME		0x00000041UL	
+// UNICODE fname
+#define FILELIST_SEPARATOR			'\a'
+#define HOSTLIST_SEPARATOR			'\a'
+#define HOSTLIST_DUMMY				"\b"
+/*  end of IP Messenger Communication Protocol version 1.2 define  */
+/*  IP Messenger for Windows  internal define  */
+#define IPMSG_REVERSEICON			0x0100
+#define IPMSG_TIMERINTERVAL			500
+#define IPMSG_ENTRYMINSEC			5
+#define IPMSG_GETLIST_FINISH		0
+#define IPMSG_BROADCAST_TIMER		0x0101
+#define IPMSG_SEND_TIMER			0x0102
+#define IPMSG_LISTGET_TIMER			0x0104
+#define IPMSG_LISTGETRETRY_TIMER	0x0105
+#define IPMSG_ENTRY_TIMER			0x0106
+#define IPMSG_DUMMY_TIMER			0x0107
+#define IPMSG_RECV_TIMER			0x0108
+#define IPMSG_ANS_TIMER				0x0109
+#define IPMSG_NICKNAME				1
+#define IPMSG_FULLNAME				2
+#define IPMSG_NAMESORT				0x00000000
+#define IPMSG_IPADDRSORT			0x00000001
+#define IPMSG_HOSTSORT				0x00000002
+#define IPMSG_NOGROUPSORTOPT		0x00000100
+#define IPMSG_ICMPSORTOPT			0x00000200
+#define IPMSG_NOKANJISORTOPT		0x00000400
+#define IPMSG_ALLREVSORTOPT			0x00000800
+#define IPMSG_GROUPREVSORTOPT		0x00001000
+#define IPMSG_SUBREVSORTOPT			0x00002000
+#endif
+/************************************************************************
+*            文件：      user_interface.c
+*            描述：      用户接口命令行
+*************************************************************************/
+#include  "myinclude.h"
+#include  "user_manager.h"
+#include  "file_manager.h"
+#include  "user_interface.h"
+#include  "communication.h"
+//帮助菜单
+char  *help=  "*******************************************************\n"\
+	"*  send/say  [username]			: 发送消息			*\n"\
+	"*  sendfile  [username]  [filename...] 	: 发送消息			*\n"\
+	"*  getfile      [filenum]			: 发送消息			*\n"\
+	"*  list/ls						    : 打印用户列表		*\n"\
+	"*  \"list/ls  file\"			    : 打印用户列表		*\n"\
+	"*  clear/cls						: 清屏				*\n"\
+	"*  help							: 帮助				*\n"\
+	"*  exit/quit						: 退出				*\n"\
+	             "**********************************************************************\n" ;
+//函数指针
+typedef  void  (*FUN)(int  argc,  char  *argv[]); 
+//命令结构体
+typedef  struct  cmd{
+	     char  *name;		//命令名称
+	     FUN  fun;		//命令处理函数
+}CMD;
+
+/*********************************************************
+函	数：void  send_fun(int  argc,  char  *argv[])
+功	能：发送文本
+参	数：命令参数/ send  [user]  [msg]/ sendfile  [user]  [file1]  [file2]
+*********************************************************/
+void  send_fun(int  argc,  char  *argv[]){
+	    struct  sockaddr_in  addr  =  {AF_INET};
+	    int  s_addr  =  0;
+	    char  name[20]  =  "";
+	    char  buf[100]  =  "";	
+	    char  sendbuf[200]="";
+	    char  temp[100]="";
+	    int  templen  =  0;
+	    long  t  =  time((time_t*)NULL);
+	    int  len  =  sprintf(sendbuf,  "1:%ld:%s:%s",  t,  						user(),  host());
+if(argc  <  2) {	//若参数小于2，则需输入用户名
+	    	 list();	
+		IPMSG_OUT_MSG_COLOR(
+	         printf("please  input  user  name:");
+	         )
+	         fgets(name,  sizeof(name),  stdin);
+	         name[strlen(name)-1]  =  0;
+	         argv[1]  =  name;  
+	    }
+	 s_addr  =  get_addr_by_name(argv[1]);
+	 if(s_addr  ==  0) {
+	         printf("error:  no  this  user:\"%s\"!\n",  argv[1]);
+	         return  ;
+ 	  }
+	  if(argc  <  3) {	  //若参数小于3，则需输入消息或文件名
+	    	  if(strcmp(argv[0],  "sendfile")==0) {
+	            	IPMSG_OUT_MSG_COLOR(			
+	             	printf("please  input  filename:");
+	             )
+	         }
+	 	else  {
+	             IPMSG_OUT_MSG_COLOR(	
+	             printf("please  input  message:");
+	             )
+	         }
+	         fgets(buf,  sizeof(buf),  stdin);
+	         buf[strlen(buf)-1]  =  0;
+	         argv[2]  =  buf;
+		 //如果是发送文件，则需切割输入的多个文件名
+	         if(  argv[0][4]=='f'  ) {
+	             int  i  =  2;
+	             argv[i]  =  buf;
+	             while((argv[i]=strtok(argv[i],  "  \t"))!=NULL)  i++;
+	         }
+	    } 
+		if(strcmp(argv[0],  "sendfile")==0)  {
+	        int  i  =  2;
+	        char  *fileopt  =  NULL;
+	        templen  =  sprintf(temp,  ":%ld:%c",IPMSG_SENDMSG|IPMSG_SENDCHECKOPT|
+IPMSG_FILEATTACHOPT,0);
+		fileopt  =  temp+templen;
+	        //添加多个文件属性
+	        while(argv[i]!=NULL)  {
+	             len  =  getfileopt(fileopt,  argv[i],  t,  i-2);
+	             templen  +=  len;
+	             fileopt  +=  len;
+	             i++;
+	        }
+	    memcpy(sendbuf+len,  temp,  templen);
+	    addr.sin_port  =  htons(PORT);
+	    addr.sin_addr.s_addr  =  s_addr;
+	    msg_send(sendbuf,len+templen,  addr);
+}
+/***********************************************************
+函	数：void  getfile_fun(int  argc,  char  *argv[])
+功	能：接收文本
+参	数：命令参数/ getfile  num（文件在链表中的序号）
+***********************************************************/
+void  getfile_fun(int  argc,  char  *argv[]){
+	    int  id  =  0;
+	    if(  argc!=2  ) {
+	        IPMSG_OUT_MSG_COLOR(
+	        printf("error  cmd  param\n");
+	        printf("command:  getfile  num\n");
+	        )
+	        return  ;
+	    }
+	    if((id=atoi(argv[1]))<0) {
+	       IPMSG_OUT_MSG_COLOR(
+	       printf("No  such  file!\n");
+	       )
+	       return  ;
+	    }
+	    recvfile(id);
+}
+/***********************************************************
+函	数：void  list_fun(int  argc,  char  *argv[])
+功	能：打印用户或文件列表
+参	数：命令参数/ls file（打印接收文件列表）
+***********************************************************/
+void  list_fun(int  argc,  char  *argv[]){
+	    if(  argv[1]==NULL  )   list();		//用户列表
+	    else  if(strcmp("file",  argv[1])==0)
+	        file_list();					//文件列表
+	    else  
+	        printf("command  not  find!\n");
+}
+/***********************************************************
+函	数：void  help_fun(int  argc,  char  *argv[])
+功	能：打开帮助菜单
+参	数：无
+***********************************************************/
+void  help_fun(int  argc,  char  *argv[]){
+	    //打印帮助菜单
+	    IPMSG_OUT_MSG_COLOR( printf("%s",  help);	 )
+}
+/***********************************************************
+函	数：void  exit_fun(int  argc,  char  *argv[])
+功	能：退出
+参	数：无
+***********************************************************/
+void  exit_fun(int  argc,  char  *argv[]){
+	    IPMsg_exit();
+	    //    free_link();
+	    exit(1);
+}
+/******************************************************************
+函	数：void  clear_fun(int  argc,  char  *argv[])
+功	能：清屏命令
+参	数：无
+*******************************************************************/
+void  clear_fun(int  argc,  char  *argv[])
+{
+	    write(1,  "\033[2J\033[0;0H",  10);
+}
+//命令数组：用来保存命令名和处理函数名
+CMD  cmdlist[]={	
+	                  {"send",  send_fun},		
+	                  {"sendfile",  send_fun},		
+	                  {"getfile",  getfile_fun},
+	                  {"list",  list_fun},		
+	                  {"ls",  list_fun},	
+	                  {"help",  help_fun},
+	                  {"exit",  exit_fun},
+	                  {"quit",  exit_fun},
+	                  {"clear",  clear_fun},			
+	                  {"cls",  clear_fun}	
+	             };
+/**********************************************************
+函	数：int  exec_cmd(char  *cmd)
+功	能：分析、分配命令
+参	数：无
+***********************************************************/
+int  exec_cmd(char  *cmd){
+	    char  *argv[10]  =  {NULL};
+	    int  argc  =  0;
+	    int  i  =  0;	
+if(strlen(cmd)==0)    return  0;	
+argv[0]  =  cmd;
+while((argv[argc]=strtok(argv[argc],  "  \t"))!=NULL)  argc++;
+	    for  (i=0;i<sizeof(cmdlist)/sizeof(CMD);i++) {
+	        //查找命令
+	        if  (strcmp(cmdlist[i].name,  argv[0])==0) {
+	            //执行命令
+	            cmdlist[i].fun(argc,  argv);
+	            return  0;
+	        }
+	    }
+	    return  -1;
+}
+/**************************************************************
+函	数：void  *user_interface(void  *arg)
+功	能：查询用户信息
+参	数：void  *arg
+***************************************************************/
+void  *user_interface(void  *arg){
+	    write(1,  "\033[32m",  5);
+	    while(1) {
+	         char  buf[100]="";
+	  write(1,"\rIPMSG:",7);
+	         fgets(buf,  sizeof(buf),  stdin);
+	         buf[strlen(buf)-1]=0;
+	         if(exec_cmd(buf)  <  0) {
+	              IPMSG_OUT_MSG_COLOR(
+	              printf("command  not  find!\n");
+	              )
+	         }
+	    }
+	    return  NULL;
+}
+/**********************************************************
+*            文件：      user_interface.h
+*            描述：      用户管理头文件
+***********************************************************/
+#ifndef _USER_INTERFACE_H_
+#define _USER_INTERFACE_H_
+//用户界面线程，处理用户输入的命令
+void *user_interface(void *arg);
+#endif	//_USER_INTERFACE_H_
+/**************************************************************
+*            文件：      user_manager.c
+*            描述：      用户管理
+*************************************************************/
+#include  "myinclude.h"
+#include  "user_manager.h"
+static  IPMSG_USER  *head  =  NULL;
+/**************************************************************
+函	数：void  add_user(IPMSG_USER  temp)
+功	能：向用户列表中添加一个用户结点
+参	数：IPMSG_USER  temp
+**************************************************************/
+void  add_user(IPMSG_USER  temp){
+	IPMSG_USER  *pf=head,  *pb=NULL,  *pend=NULL;
+	while(pf  !=  NULL)	    {
+	if(pf->s_addr  ==  temp.s_addr) //用户是否已经在链表中
+	         return;
+	         pend  =  pf;
+	         pf  =  pf->next;	
+	}
+pb=(IPMSG_USER  *)malloc(sizeof(IPMSG_USER));
+strcpy(pb->name,  temp.name);
+	strcpy(pb->host,  temp.host);
+	pb->s_addr  =  temp.s_addr;	
+	pb->next=NULL;
+ 	if(head  ==  NULL)
+	 	head  =  pb;
+	else
+		pend->next  =  pb;
+}
+/**********************************************************
+函	数：del_user(IPMSG_USER  user)
+功	能：从用户列表中删除一个用户结点
+参	数：IPMSG_USER  user
+***********************************************************/
+void  del_user(IPMSG_USER  user){
+	 IPMSG_USER  *p1=head,*p2=NULL;
+	 if(head==NULL)      return  ;
+	 else {
+	         while((strcmp(p1->name,user.name)!=0)
+			&&(p1->next!=NULL)) {
+	            		 p2=p1;
+	            		 p1=p1->next;
+	         	}
+	         if(strcmp(p1->name,user.name)==0) {
+	            if(p1==head)
+	                head=p1->next;
+	            else  
+	                p2->next=p1->next;
+	            free(p1);
+	         }
+	    }
+}
+/****************************************************************
+函	数：int  get_addr_by_name(char  *name)
+功	能：根据用户名返回IP地址
+参	数：char  *name
+****************************************************************/
+int  get_addr_by_name(char  *name){
+       IPMSG_USER  *p=head;
+	while(p!=NULL)   {
+	     if(strcmp(p->name,  name)==0)  { return  p->s_addr; }
+	       	 p  =  p->next;
+	      }	
+	    return  0;
+}
+/******************************************************************
+函	数：void  list(void)
+功	能：打印用户列表
+参	数：无
+*******************************************************************/
+void  list(void){
+	 IPMSG_USER  *p=head;
+	 IPMSG_OUT_MSG_COLOR(
+	 printf("%10s\t%10s\t%s\n",  "Username","Hostname",
+		"IP  Address");   )
+	    while(p!=NULL) {
+	        struct  in_addr  addr  =  {p->s_addr};
+	        IPMSG_OUT_MSG_COLOR(
+	        printf("%10s\t%10s\t%s\n",p->name,p->host,
+			inet_ntoa(addr));)
+	        p=p->next;
+	    }	
+}
+/********************************************************************
+*            文件：     user_manager.h
+*            描述：     用户管理头文件
+********************************************************************/
+#ifndef _LIST_H_
+#define _LIST_H_
+//用户信息结构体
+typedef struct userlist{
+	    char name[20];	//用户名
+	    char host[20];		//主机名
+	    int s_addr;		//IP地址(32位网络字节序)
+	    struct userlist *next;
+}IPMSG_USER;
+//向用户列表中添加一个用户结点
+void add_user(IPMSG_USER temp);
+//从用户列表中删除一个用户结点
+void del_user(IPMSG_USER temp);
+//根据用户名返回IP地址
+int get_addr_by_name(char *name);
+//打印用户列表
+void list(void);
+//void free_link(void);
+#endif	//_LIST_H_
+/*********************************************************
+*            文件：      file_manager.c
+*    		 描述： 发送文件信息*********************************************************/
+#include  <sys/stat.h>
+#include  "myinclude.h"
+#include  "file_manager.h"
+static  IPMSG_FILE  *sendhead  =  NULL;	//发送链表
+static  IPMSG_FILE  *recvhead  =  NULL;  	//接收链表
+/******************************************************************
+函	数：void  add_file(IPMSG_FILE  temp,  int  flag)
+功	能：向链表（接收或发送链表）中添加一个文件
+参	数：IPMSG_FILE temp, int  flag，flag包含SENDFILE（发送链表）和RECVFILE（接收链表)
+*******************************************************************/
+void  add_file(IPMSG_FILE  temp,  int  flag){
+	    IPMSG_FILE  **phead=NULL,  *pf=NULL,  *pb=NULL;
+	    phead  =  (flag==SENDFILE)?(&sendhead):(&recvhead);
+	    pf  =  *phead;
+	    pb  =  (IPMSG_FILE  *)malloc(sizeof(IPMSG_FILE));
+	    strcpy(pb->name,  temp.name);
+	    strcpy(pb->user,  temp.user);
+	    pb->num  =  temp.num;
+	    pb->ltime  =  temp.ltime;
+	    pb->size  =  temp.size;
+	    pb->pkgnum  =  temp.pkgnum;
+	    pb->next  =  NULL;
+if(  *phead==NULL  )	    {	 *phead  =  pb;	    }
+else    {
+	 while(pf->next  !=  NULL) {  pf  =  pf->next;    }
+	  pf->next  =  pb;
+    }
+}
+/*********************************************************
+函	数：void  del_file(IPMSG_FILE  *temp,  int  flag)
+功	能：从链表（接收或发送链表）中删除一个文件
+参	数：IPMSG_FILE  temp,  int  flag， flag包含SENDFILE（发送链表）和RECVFILE（接收链表） 
+**********************************************************/
+void  del_file(IPMSG_FILE  *temp,  int  flag){
+	    IPMSG_FILE  **phead=NULL,  *pf=NULL,  *pb=NULL;
+	    phead  =  (flag==SENDFILE)?&sendhead:&recvhead;
+	    pb  =  *phead;
+	    while(pb!=NULL)	    {
+	        if(  (temp->pkgnum==pb->pkgnum)  &&  (temp->num==pb->num)  ) {
+	            if(pb==*phead)     *phead  =  pb->next;	
+	            else		         pf->next  =  pb->next;
+  		   pf=pb->next;
+	            free(pb);
+	return  ;}
+	pf  =  pb;
+	pb  =  pb->next; }
+}
+/***************************************************************
+函	数：IPMSG_FILE  *getfileinfo(long  pkgnum,  int  filenum)
+功	能：根据包标号和文件序号从发送链表中获取文件
+参	数：long  pkgnum,  int  filenum
+****************************************************************/
+IPMSG_FILE  *getfileinfo(long  pkgnum,  int  filenum){
+	    IPMSG_FILE  *p  =  sendhead;
+	    while(p!=NULL)   {
+	        if(  p->pkgnum  !=  pkgnum  )   {
+	            p  =  p->next;
+	            continue;
+	        }
+	        if(  p->num  !=  filenum  )  {	
+	            p  =  p->next;
+	            continue;
+	        }
+	        return  p;
+	    }
+	    return  NULL;}
+/***************************************************************************************
+函	数：int  getfileopt(char  *fileopt,  char  *filename,  long  pkgnum,  int  num)
+功	能：获取文件属性并保存到fileopt中，将文件信息保存到发送链表中
+参	数：char  *fileopt,  char  *filename,  long  pkgnum,  int  num 
+*****************************************************************************************/
+int  getfileopt(char  *fileopt,  char  *filename,  long  pkgnum,  int  num){
+	    int  len  =  0;
+	    IPMSG_FILE  file;
+	    struct  stat  fstat;	
+	    int  ret  =  stat(filename,  &fstat);
+	    if(  ret<0  ) {	
+	        IPMSG_OUT_MSG_COLOR(
+	        printf("No  such  file:*%s*!\n",  filename);
+	        )
+	        return  0;
+	    }
+	    strcpy(file.name,  filename);
+	    file.num  =  num;
+	    file.pkgnum  =  pkgnum;
+	    file.size  =  fstat.st_size;
+	    add_file(file,  SENDFILE);
+	    len  =  sprintf(fileopt,  "%d:%s:%lx:%lx:%ld\a",  \file.num,  file.name,  					fstat.st_size,  fstat.st_ctime,IPMSG_FILE_REGULAR  );
+	    return  len;
+}
+/***********************************************
+函	数：IPMSG_FILE  *  find_file(int  id)
+功	能：在接收链表中按照序号（id）查找文件
+参	数：int id 
+***********************************************/
+IPMSG_FILE  *  find_file(int  id)
+{	
+	    int  i  =  id;
+	    IPMSG_FILE  *p  =  recvhead;
+	    if(p  ==  NULL)
+	         return  NULL;
+	    for(i=0;i!=id;i++)
+	    {
+	         if(  p->next  ==  NULL  )
+	         {
+	             return  NULL;
+	    }
+	         p  =  p->next;
+	    }	
+	    return  p;
+}
+/****************************************************************
+函	数：void  file_list(void)
+功	能：打印接收文件列表
+参	数：无
+****************************************************************/
+void  file_list(void){
+	    int  id  =  0;
+	    IPMSG_FILE  *pb  =  recvhead;
+	    IPMSG_OUT_MSG_COLOR(
+	    printf("\rNUM\t\tFILE\t\tSender\n");   )
+	    while(pb  !=  NULL) {
+	        IPMSG_OUT_MSG_COLOR(
+	        printf("%d\t%20s\t%s\n",  id++,  pb->name,  pb->user);
+	        )
+	        pb  =  pb->next;    }
+}
+/***************************************************************
+*            文件：      file_manager.h
+*            描述：      发送文件头文件
+****************************************************************/
+#ifndef _FILE_H_
+#define _FILE_H_
+#define SENDFILE	0
+#define RECVFILE	1
+typedef struct filelist{		//文件信息结构体
+	    char name[50];
+	    int num;
+	    long pkgnum;
+	    long size;
+	    long ltime;
+	    char user[10];	
+	    struct filelist *next;
+}IPMSG_FILE;
+//向链表（接收或发送链表）中添加一个文件，如
+//flag : SENDFILE（发送链表）或RECVFILE（接收链表）
+void add_file(IPMSG_FILE temp, int flag);
+//从链表（接收或发送链表）中删除一个文件
+//flag : SENDFILE（发送链表）或RECVFILE（接收链表）
+void del_file(IPMSG_FILE *temp, int flag);
+//在接收链表中按照序号（id）查找文件
+IPMSG_FILE * find_file(int id);
+//根据包标号和文件序号从发送链表中获取文件
+IPMSG_FILE *getfileinfo(long pkgnum, int filenum);
+//获取文件属性并保存到fileopt中，将文件信息保存到发送链表中
+int getfileopt(char *fileopt, char *filename, long pkgnum, int num);
+//打印接收文件链表
+void file_list(void);
+//void free_link(void);
+#endif	//_FILE_H_
+/*****************************************************************            文件：      communication.c
+*            描述：      上线、聊天、传送文件
+****************************************************************/
+#include  "myinclude.h"
+#include  "communication.h"
+#include  "user_manager.h"
+#include  "file_manager.h"
+static  int  udpfd  =  0;
+static  int  tcpfd  =  0;
+static  char  user_name[20]  =  "";
+static  char  host_name[30]  =  "";
+/****************************************************************
+函	数：	void  create_server(void)
+功	能：	创建UDP  和  TCP_Server  套接口
+参	数：	无
+****************************************************************/
+void  create_server(void){
+	    int  broadcast=1;
+	    struct  sockaddr_in  addr  =  {AF_INET};
+	    addr.sin_port  =  htons(PORT);
+	    addr.sin_addr.s_addr  =  htonl(INADDR_ANY);
+	    //Create  TCP  socket      for  SendFile  Server
+	    tcpfd  =  socket(AF_INET,SOCK_STREAM,0);
+	    if(tcpfd  <  0) {
+	        perror("Socket  TCP");
+	        exit(-1);
+	    }
+	    if(bind(tcpfd,  (struct  sockaddr*)&addr,  sizeof(addr))<0) {
+	        perror("Bind  UDP");
+	        exit(1);
+	    }
+	    listen(tcpfd,  10);
+	    //Create  UDP  socket  for  commucation
+	    udpfd  =  socket(AF_INET,SOCK_DGRAM,0);
+	    if(udpfd  <  0) {
+	        perror("Socket  UDP");
+	        exit(-1);
+	    }
+	    if(bind(udpfd,  (struct  sockaddr*)&addr,  sizeof(addr))<0) {
+	       		 perror("Bind  UDP");
+	        		exit(1);
+	     }	    setsockopt(udpfd,SOL_SOCKET,SO_BROADCAST,&broadcast,  sizeof(int));
+}
+/******************************************************************************************************************
+函	数：void  broad_cast_online_info(void)
+功	能：上线广播
+参	数：无
+******************************************************************************************************************/
+void  broad_cast_online_info(void){
+	    char  buf[100]="";
+	    struct  sockaddr_in  addr  =  {AF_INET};
+	    int  t  =  time((time_t  *)NULL);
+	    int  len  =  sprintf(buf,"1:%d:%s:%s:%ld:%s", \t,user_name,host_name,IPMSG_BR_ENTRY,user_name);
+	    addr.sin_port  =  htons(PORT);
+	    //    addr.sin_addr.s_addr=inet_addr("255.255.255.255");	
+	    addr.sin_addr.s_addr  =  htonl(-1);			//modified  by  wangyanjun  in  10/7/9
+	    sendto(udpfd,  buf,  len,  0,  (struct  sockaddr*)&addr,sizeof(addr));	
+}
+/*******************************************
+函	数：int  tcp_fd(void)
+功	能：获取TCP套接字
+参	数：无
+*******************************************/
+int  tcp_fd(void){   return  tcpfd; }
+/****************************************************************
+函	数：int  udp_fd(void)
+功	能：获取UDP套接字
+参	数：无
+****************************************************************/
+int  udp_fd(void){    return  udpfd; }
+/****************************************************************
+函	数：char  *user(void)
+功	能：获取用户名称
+参	数：无
+****************************************************************/
+char  *user(void)
+{
+	    return  user_name;
+}
+
+/****************************************************************
+函	数：char  *host(void)
+功	能：获取主机名
+参	数：无****************************************************************/
+char  *host(void)
+{
+	    return  host_name;
+}
+/****************************************************************
+函	数：void  IPMsg_exit(void)
+功	能：下线广播
+参	数：无
+****************************************************************/
+void  IPMsg_exit(void)
+{
+	    char  buf[100]="";
+	    struct  sockaddr_in  addr  =  {AF_INET};
+	    int  t  =  time((time_t  *)NULL);
+	    int  len  =  sprintf(buf,"1:%d:%s:%s:%ld:%s", 
+ \t,user_name,host_name,IPMSG_BR_EXIT,user_name);
+	    addr.sin_port  =  htons(PORT);
+	    addr.sin_addr.s_addr=inet_addr("255.255.255.255");		
+	    sendto(udpfd,  buf,  len,  0,  (struct  sockaddr*)
+			&addr,sizeof(addr));	
+}
+/****************************************************************
+函	数：void  online(char  *user,  char  *host)
+功	能：上线并初始化系统
+参	数：char  *user,  char  *host
+****************************************************************/
+void  online(char  *user,  char  *host)
+{
+	    strcpy(user_name,user);
+	    strcpy(host_name,host);
+	    create_server();
+	    broad_cast_online_info();
+}
+/***************************************************************
+函	数：void  msg_send(char  *msg,  int  len, struct  sockaddr_in  addr)
+功	能：发送消息
+参	数：char  *msg,  int  len, struct  sockaddr_in  addr
+****************************************************************/
+void  msg_send(char  *msg,  int  len, struct  sockaddr_in  addr)
+{
+	sendto(udpfd,  msg,  len,  0,  (struct  sockaddr*)&addr,  	sizeof(addr));
+}
+/****************************************************************
+函	数：int  recvfile(int  id)
+功	能：接收文件（参数为接收文件列表中的序号）
+参	数：int  id
+****************************************************************/
+int  recvfile(int  id){
+	    int  fd  =  0;
+	    char  buf[2048]="";
+	    FILE  *fp  =  NULL;
+	    unsigned  long  len  =  0;
+	    struct  sockaddr_in  addr  =  {AF_INET};
+	    int  s_addr  =  0;
+	    IPMSG_FILE  *p  =  find_file(id);	 //是否存在该文件
+	    if(  p==NULL	)  {
+	        IPMSG_OUT_MSG_COLOR( printf("no  such  file  id\n");  )
+	        return  -1;   }
+	    //根据发送者姓名获取发送者地址
+	    s_addr  =  get_addr_by_name(p->user);	
+	    if(  s_addr  ==  0  )	    {
+	        IPMSG_OUT_MSG_COLOR(
+	        printf("recv  file  error:  user  is  not  online!\n");     )
+	        del_file(p,  RECVFILE);
+	        return  -1;
+	    }
+	    fd  =  socket(AF_INET,  SOCK_STREAM,  0);	//创建临时TCP Client，用于接收文件
+	    if(  fd  <  0  )  {
+	        IPMSG_OUT_MSG_COLOR(printf("recv  file  error:  creat  socket  error!\n"); )
+	        return  -1;
+	    }
+	    addr.sin_port  =  htons(PORT);
+	    addr.sin_addr.s_addr  =  s_addr;
+	    if(connect(fd,  (struct  sockaddr*)&addr,  sizeof(addr))!=0){
+	        perror("recvfile  connect");
+	        return  -1;
+	    }
+	    len  =  sprintf(buf,  "1:%ld:%s:%s:%ld:%lx:%d:0",  
+				time((time_t*)NULL),user(),  host(), 
+				IPMSG_GETFILEDATA,  p->pkgnum,  p->num);
+	    send(fd,  buf,  len,  0);		//发送IPMSG_GETFILEDATA
+	    fp  =  fopen(p->name,  "w");
+	    if(  fp==NULL  ) {
+	        perror("savefile");
+	        return  -1;
+	    }
+	    len  =  0;	
+	    do	 { 			//接收文件
+		int  rlen  =  recv(fd,  buf,  sizeof(buf),  0);
+	         len  +=  rlen;
+	         IPMSG_OUT_MSG_COLOR(printf("\rrecvlen=%d%%",
+							 (int)((100*len)/p->size)); )
+	         fflush(stdout);
+	         fwrite(buf,  1,  rlen,  fp);
+	    }while(len  <  p->size);
+	    printf("\n");
+	    close(fd);	//关闭TCP  Client
+	    fclose(fp);  //关闭文件
+	    del_file(p,  RECVFILE);	//从文件列表中删除接收过的文件
+	    return  0;
+}
+/************************************************************
+函	数：void  *sendfile_thread(void  *arg)
+功	能：发送文件的线程
+参	数：void  *arg
+************************************************************/
+void  *sendfile_thread(void  *arg){
+	    int  fd  =  tcp_fd();	//获取TCP_Server套接口描述符
+	    while(1)	    {
+	        struct  sockaddr_in  addr  =  {AF_INET};
+	        unsigned  int  addrlen  =  sizeof(addr);
+	        int  clifd  =  accept(fd,  (struct  sockaddr*)&addr,  						&addrlen);
+	        if(  clifd<0  ) {
+	            perror("accept");
+	            exit(1);
+	        }
+while(1) { 	//  发送多个文件
+	IPMSG_FILE  *p  =  NULL;
+	FILE  *fp  =  NULL;
+	IPMSG_USER  temp;
+	long  pkgnum  =  0  ;
+	char  edition[100]="";  
+	long  oldpkgnum  =  0  ;
+	long  cmd  =  0;
+	int  filenum  =  0;
+	char  buf[1400]="";
+	int  sendsize  =  0;			
+	//接收IPMSG_GETFILEDATA
+	 if(recv(clifd,  buf,  sizeof(buf),  0)==0)
+	       break;
+	       sscanf(buf,%[^:]:%ld:%[^:]:%[^:]:%ld:%lx:%x",edition,  					&pkgnum,  temp.name,  temp.host,  &cmd,
+	                 &oldpkgnum,  &filenum);
+	  //判断是否为IPMSG_GETFILEDATA          	if((GET_MODE(cmd)&IPMSG_GETFILEDATA)!=IPMSG_GETFILEDATA)
+	                 break;
+//获取之前发送的文件信息
+if  ((p  =  getfileinfo(oldpkgnum,  filenum))==NULL) {
+	return  NULL;
+}
+if(  (fp=fopen(p->name,  "r"))==NULL  ) {
+	IPMSG_OUT_MSG_COLOR(
+	printf("senderror:  no  such  file:  %s\n",  p->name);
+	)
+	return  NULL;
+}
+do {	//发送文件
+	int  size  =  fread(buf,  1,  sizeof(buf),  fp);
+	isend(clifd,  buf,  size,  0);
+	isendsize  +=  size;
+}while(sendsize  <  p->size);
+	fclose(fp);				//关闭文件
+	del_file(p,  SENDFILE);	//从发送文件链表中删除文件
+}//end  wile1	  			//循环发送多个文件
+	close(clifd);	  	//关闭套接口，等待下一个用户连接
+}//end  while
+	return  NULL;
+}
+/****************************************************************
+函	数：void  *recv_msg_thread(void  *arg)
+功	能：接收消息线程，接收其他客户端发送的UDP数据
+参	数：void  *arg
+****************************************************************/
+void  *recv_msg_thread(void  *arg){
+	    while(1)  {
+	        char  buf[500]="";		
+	        char  edition[100]="";
+	        struct  sockaddr_in  addr  =  {AF_INET};
+	        unsigned  int  addrlen  =  sizeof(addr);
+	        int  len  =  0;
+	        long  pkgnum  =  0;
+	        long  cmd  =  0;
+	        char  msg[100]="";
+	        int  t  =  0;
+	        char  *p  =  NULL;
+	        IPMSG_USER  temp;			
+	        len  =  recvfrom(udp_fd(),  buf,  sizeof(buf),  0,  (struct  sockaddr*)&addr,  &addrlen);
+	        sscanf(buf,  "%[^:]:%ld:%[^:]:%[^:]:%ld",edition,  &pkgnum,  temp.name,  temp.host,  &cmd);
+p  =  strrchr(buf,  ':');			   	//查找附加信息
+memcpy(msg,  p+1,  len-(p-buf));	//将附加信息放入msg中
+temp.s_addr  =  addr.sin_addr.s_addr;
+switch(GET_MODE(cmd)) {
+	case  IPMSG_BR_ENTRY:
+		t  =  time((time_t)NULL);
+		len  =  sprintf(buf,"1:%d:%s:%s:%ld:%s",t,user(),
+			      host(),IPMSG_ANSENTRY,user());
+		sendto(udp_fd(),buf,len,0,(struct sockaddr*)
+		   	   &addr,sizeof(addr));
+	case  IPMSG_ANSENTRY:
+	         add_user(temp);
+	         break;
+	case  IPMSG_SENDMSG:
+	         if(msg[0]!=0) {
+	                  IPMSG_OUT_MSG_COLOR(
+	                  printf("\r[recv  msg  from:  %s  ]#\n%s\n",  					temp.name,  msg);
+	                  )
+	                  write(1,"\rIPMSG:",7);
+		}
+if((cmd&IPMSG_SENDCHECKOPT)==IPMSG_SENDCHECKOPT) {	
+	char  buf[50]="";
+	int  len  =  printf(buf,"1:%d:%s:%s:%ld:%ld",t,user(),
+			 host(),IPMSG_RECVMSG,  pkgnum);
+	                  sendto(udp_fd(),buf,len,0,(struct  sockaddr*)
+				   &addr,sizeof(addr)); }
+if((cmd&IPMSG_FILEATTACHOPT)==IPMSG_FILEATTACHOPT){
+	char  *p  =  msg+strlen(msg)+1;
+	//printf("filemsg=%s\n",p);
+	char  *fileopt=  strtok(p,  "\a");	//fileopt指向第一个文件属性
+	do{	//循环提取文件信息
+		IPMSG_FILE  ftemp;
+		sscanf(fileopt,  "%d:%[^:]:%lx:%lx",  &ftemp.num,  					  ftemp.name,  &ftemp.size,  &ftemp.ltime);	
+	         strcpy(ftemp.user,  temp.name);
+	         ftemp.pkgnum  =  pkgnum;
+	         add_file(ftemp,  RECVFILE);
+	         fileopt  =  strtok(NULL,  "\a"); //fileopt指向下一个文件属性
+	                 }while(fileopt!=NULL);
+	                 IPMSG_OUT_MSG_COLOR(
+	                 printf("\r<<<Recv  file  from  %s!>>>\n", 
+				 temp.name);  )
+	write(1,"\rIPMSG:",7);
+}
+break;
+case  IPMSG_RECVMSG:
+	{
+	       IPMSG_OUT_MSG_COLOR(
+	       	printf("\r%s  have  receved  your  msg!\n", temp.name);
+	       )
+	       write(1,"\rIPMSG:",7);
+	 }
+	 break;
+case  IPMSG_BR_EXIT:
+	del_user(temp);
+	break;
+default  :
+	break;
+}
+}
+return  NULL;
+}
+/***************************************************************
+*            文件：      communication.h
+*            描述：      上线、聊天、传送文件功能头文件
+****************************************************************/
+#ifndef _COMMUNICATION_H_
+#define _COMMUNICATION_H_
+#include "myinclude.h"
+#define PORT 2425
+//接收消息线程，接收其他客户端发送的UDP数据
+void *recv_msg_thread(void *arg);
+//发送文件线程，等待其他客户端接收文件并负责向其传送文件
+void *sendfile_thread(void *arg);
+void online(char *user, char *host); //上线
+void ipmsg_exit(void); //下线
+//发送信息
+void msg_send(char *msg, int len, struct sockaddr_in addr);
+//接收文件（参数为接收文件列表中的序号）
+int recvfile(int id);
+char *user(void); 	//获取用户名
+char *host(void);	//获取主机名
+int udp_fd(void); 	//获取UDP描述符
+#endif	//_COMMUNICATION_H_
+/*************************************************************************
+*            文件：      Makefile
+*            描述：      Linux操作系统下的Makefile编译文件
+*************************************************************************/
+obj=main.o user_manager.o communication.o user_interface.o file_manager.o
+CC=gcc
+CFLAGS=-Wall -O2
+execfile=ipmsg
+$(execfile):$(obj)
+	     $(CC) -o $@ $^ $(CFLAGS) -lpthread
+
+%O:%C %h
+	     $(CC) -c -o $@ $^ $(CFLAGS)
+clean:
+	@rm $(obj) -rf $(execfile) –rf
